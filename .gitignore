@@ -1,0 +1,33 @@
+# Python
+__pycache__/
+*.py[cod]
+*.so
+.venv/
+venv/
+.env
+.pytest_cache/
+.mypy_cache/
+
+# OS / IDE
+.DS_Store
+.vscode/
+.idea/
+
+data/
+# Build artifacts
+build/
+dist/
+*.egg-info/
+
+# Data artifacts
+results/**
+!results/.gitkeep
+models/**
+!models/.gitkeep
+data/processed/**
+!data/processed/.gitkeep
+data/interim/**
+!data/interim/.gitkeep
+
+# Logs
+*.log

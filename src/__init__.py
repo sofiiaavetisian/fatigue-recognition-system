@@ -1,0 +1,1 @@
+"""Fatigue recognition system package."""

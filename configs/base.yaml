@@ -1,0 +1,41 @@
+project:
+  name: fatigue-recognition-system
+  seed: 42
+  timezone: Europe/Belgrade
+
+data:
+  raw_dir: data/raw
+  processed_dir: data/processed
+  labels_dir: data/labels
+  splits_dir: data/splits
+
+video:
+  target_width: 1280
+  target_height: 720
+  target_fps: 25
+
+activation:
+  enabled: true
+  sequence:
+    - thumbs_up
+    - peace_sign
+    - ok_sign
+  sequence_timeout_sec: 10.0
+  max_gap_between_gestures_sec: 5.0
+  cooldown_sec: 1.0
+
+fatigue:
+  mode: hybrid  # classical | modern | hybrid
+  classical:
+    ear_threshold: 0.22
+    ear_consec_frames: 18
+    mar_threshold: 0.65
+    yawn_consec_frames: 12
+    pitch_nod_threshold_deg: 18
+  modern:
+    model_path: models/modern_baseline.pt
+    confidence_threshold: 0.60
+  fusion:
+    classical_weight: 0.45
+    modern_weight: 0.55
+    alert_on_score: 0.70

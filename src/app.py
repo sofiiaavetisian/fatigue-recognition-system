@@ -9,6 +9,7 @@ from src.config import load_settings
 from src.core.state_machine import ActivationState, GestureActivationFSM
 from src.pipelines.gesture import HandGestureDetector, StableGestureEmitter
 from src.utils.logging_utils import configure_logging
+from src.pipelines.fatigue_classical import classical_fatigue_score
 
 
 def parse_args() -> argparse.Namespace:
@@ -27,6 +28,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--stable-frames", type=int, default=3, help="Frames required to emit a gesture event")
     parser.add_argument("--preferred-hand", type=str, default="right", choices=["right", "left", "any"])
     parser.add_argument("--gesture-debounce-sec", type=float, default=0.8)
+    parser.add_argument("--rotate", type=int, choices=[0, 90, 180, 270], default=0, help="Rotate video by degrees")
     return parser.parse_args()
 
 
@@ -53,7 +55,7 @@ def _run_simulation(fsm: GestureActivationFSM, sequence: str, log: logging.Logge
         ts += step
 
 
-def _run_live(args: argparse.Namespace, fsm: GestureActivationFSM, log: logging.Logger) -> None:
+def _run_live(args: argparse.Namespace, fsm: GestureActivationFSM, log: logging.Logger, settings) -> None:
     source = args.video if args.video else args.camera_index
     cap = cv2.VideoCapture(source)
     if not cap.isOpened():
@@ -84,6 +86,13 @@ def _run_live(args: argparse.Namespace, fsm: GestureActivationFSM, log: logging.
                 break
             frame_idx += 1
 
+            if args.rotate == 90:
+                frame = cv2.rotate(frame, cv2.ROTATE_90_CLOCKWISE)
+            elif args.rotate == 180:
+                frame = cv2.rotate(frame, cv2.ROTATE_180)
+            elif args.rotate == 270:
+                frame = cv2.rotate(frame, cv2.ROTATE_90_COUNTERCLOCKWISE)
+
             ts = cap.get(cv2.CAP_PROP_POS_MSEC) / 1000.0
             if ts <= 0.0:
                 ts = frame_idx / fps
@@ -98,6 +107,10 @@ def _run_live(args: argparse.Namespace, fsm: GestureActivationFSM, log: logging.
                     last_emitted_ts = ts
 
             snap = fsm.consume(gesture=emitted, ts=ts)
+            
+            fatigue_score = 0.0
+            if snap.state == ActivationState.ACTIVE:
+                fatigue_score = classical_fatigue_score(frame, settings=settings.raw['fatigue'])
 
             if emitted is not None or snap.state != last_state:
                 log.info(
@@ -134,6 +147,16 @@ def _run_live(args: argparse.Namespace, fsm: GestureActivationFSM, log: logging.
                     (255, 255, 255),
                     2,
                 )
+
+                if snap.state == ActivationState.ACTIVE:
+                    alert_color = (0, 0, 255) if fatigue_score > 0.6 else (255, 255, 255)
+                    cv2.putText(
+                        frame, 
+                        f"FATIGUE SCORE: {fatigue_score:.2f}", 
+                        (20, 180), 
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.9, alert_color, 2
+                    )
+
                 cv2.imshow("Driver Monitor - Gesture Activation", frame)
                 if cv2.waitKey(1) & 0xFF == ord("q"):
                     break
@@ -159,7 +182,7 @@ def main() -> None:
         _run_simulation(fsm, args.simulate_gestures, log)
         return
 
-    _run_live(args, fsm, log)
+    _run_live(args, fsm, log, settings)
 
 
 if __name__ == "__main__":

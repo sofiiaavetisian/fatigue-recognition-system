@@ -1,0 +1,21 @@
+{
+  "model_info": {
+    "architecture": "mobilenet_v3_small",
+    "weights": "pretrained_imagenet_finetuned",
+    "num_classes": 1,
+    "output_activation": "sigmoid"
+  },
+  "training_stats": {
+    "epochs": 10,
+    "device": "mps",
+    "final_train_loss": 0.0167,
+    "final_train_acc": 0.9953,
+    "final_val_loss": 0.0179,
+    "final_val_acc": 0.9937
+  },
+  "data_info": {
+    "source": "data/splits",
+    "labeling_method": "classical_teacher_bootstrapping",
+    "thresholds_used_for_labeling": "strict_0.85_0.05"
+  }
+}

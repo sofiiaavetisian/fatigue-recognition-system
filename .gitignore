@@ -24,10 +24,21 @@ results/**
 !results/.gitkeep
 models/**
 !models/.gitkeep
+!models/training_summary.json
+!models/thumbs_up_calibration.json
+data/raw/*
 data/processed/**
+data/splits/*
+data/labels/*
 !data/processed/.gitkeep
 data/interim/**
 !data/interim/.gitkeep
 
 # Logs
 *.log
+
+# macOS specific
+.DS_Store
+
+# Local configuration (if any)
+.env.local

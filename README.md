@@ -8,6 +8,14 @@ The system activates only when this ordered gesture sequence is detected:
 2. `peace_sign`
 3. `ok_sign`
 
+## The Hybrid Brain
+This system uses a "Dual-Brain" approach to maximize reliability:
+
+*   **Classical (The Math):** Uses Mediapipe to calculate **Eye Aspect Ratio (EAR)** and **Mouth Aspect Ratio (MAR)**. This provides the logic for eye closure duration and yawning.
+*   **Modern (The AI):** Uses a **MobileNetV3-Small** neural network. This model feels the overall fatigue of the face, head tilt, and expression.
+*   **Sensitivity Tuning:** The AI is configured with a **+8.0 logit boost** in `fatigue_modern.py` to ensure high sensitivity on real-world webcams.
+*   **Weighted Fusion:** The final score is a weighted average (**55% Math / 45% AI**), ensuring the system works even if the AI is uncertain or the lighting is poor for geometric math.
+
 ## Reproducible setup
 
 ### Option 1: conda
@@ -22,6 +30,16 @@ make setup
 source .venv/bin/activate
 ```
 
+## Testing & Verification
+Before running the full app, verify the core logic and hardware compatibility:
+```bash
+# Run the full test suite (FSM, Hand Landmarks, UI)
+python3 -m unittest discover tests
+
+# Specifically verify the Hybrid weight math (0.55/0.45 split)
+python3 -m tests.test_hybrid
+```
+
 ## Quick checks
 ```bash
 make test
@@ -33,6 +51,8 @@ python -m src.app --config configs/base.yaml --simulate-gestures thumbs_up,peace
 ```bash
 # Video file
 python -m src.app --config configs/base.yaml --video data/raw/IMG_8221.MOV --max-frames 400
+
+> **Note for Mac Users:** This system is configured to run AI inference on the **CPU** by default. This ensures stability on Intel/AMD MacBooks and avoids common crashes associated with the MPS (Metal) backend.
 
 # Rotate video (if recorded upside-down or sideways)
 # Options: 90 (clockwise), 180 (flip), 270 (counter-clockwise)

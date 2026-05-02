@@ -25,17 +25,21 @@ activation:
   cooldown_sec: 1.0
 
 fatigue:
-  mode: hybrid  # classical | modern | hybrid
+  mode: hybrid
+
   classical:
-    ear_threshold: 0.22
-    ear_consec_frames: 18
-    mar_threshold: 0.65
-    yawn_consec_frames: 12
+    ear_threshold: 0.25
+    ear_consec_frames: 10
+    mar_threshold: 0.55
+    yawn_consec_frames: 10
     pitch_nod_threshold_deg: 18
   modern:
-    model_path: models/modern_baseline.pt
-    confidence_threshold: 0.60
-  fusion:
-    classical_weight: 0.45
-    modern_weight: 0.55
-    alert_on_score: 0.70
+    model_path: models/fatigue_model.pt  
+    threshold: 0.60
+    smoothing_window: 6                 
+
+  # This matches HybridFatigueDetector
+  hybrid:                                
+    weight_classical: 0.55            
+    weight_modern: 0.45                 
+    threshold: 0.45                     

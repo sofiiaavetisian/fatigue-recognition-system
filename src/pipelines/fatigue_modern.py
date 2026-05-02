@@ -6,67 +6,80 @@ from torchvision import models, transforms
 from PIL import Image
 import cv2
 import numpy as np
+from collections import deque
 
 class ModernFatigueDetector:
     def __init__(self, config: dict):
-        # 1. Configuration & Thresholds
-        # Expects config['modern'] or a flat dict with thresholds
+        # 1. Configuration & Smoothing Setup
         self.cfg = config.get('modern', config) 
         self.threshold = self.cfg.get('threshold', 0.5)
         
-        # 2. Device Selection (Use 'mps' for Mac M1/M2/M3, else 'cpu')
-        self.device = torch.device("mps" if torch.backends.mps.is_available() else "cpu")
+        # Buffer for stability (averages the last 5 frames)
+        window_size = self.cfg.get('smoothing_window', 5)
+        self.score_buffer = deque(maxlen=window_size)
         
-        # 3. Image Preprocessing (Standard AI normalization)
-        # Resizes to 224x224 and normalizes colors to match the AI's training
+        # 2. Device Selection
+        # MANDATORY: Using 'cpu' because AMD GPUs on Intel Macs crash with 'mps'
+        self.device = torch.device("cpu")
+        print("Modern AI: Using CPU for stability on Intel/AMD Mac.")
+        
+        # 3. Image Preprocessing
+        # Added CenterCrop to prevent face-squashing
         self.transform = transforms.Compose([
+            transforms.ToPILImage(),
             transforms.Resize((224, 224)),
             transforms.ToTensor(),
             transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
-        ])
+])
         
-        # 4. Load Pre-trained Model (MobileNetV3 Small)
-        # We modify the final 'classifier' layer to output a single score
-        self.model = models.mobilenet_v3_small(weights=models.MobileNet_V3_Small_Weights.DEFAULT)
+        # 4. Initialize Architecture
+        self.model = models.mobilenet_v3_small(weights=None)
         num_features = self.model.classifier[3].in_features
         self.model.classifier[3] = nn.Linear(num_features, 1)
         
-        MODEL_PATH = 'models/fatigue_model.pt'
+        # 5. Load the Trained Weights
+        MODEL_PATH = self.cfg.get('model_path', 'models/fatigue_model.pt')
         if os.path.exists(MODEL_PATH):
-            self.model.load_state_dict(torch.load(MODEL_PATH, map_location=self.device))
-            print("Successfully loaded trained fatigue model!")
+            try:
+                state_dict = torch.load(MODEL_PATH, map_location=self.device)
+                if isinstance(state_dict, torch.nn.Module):
+                    state_dict = state_dict.state_dict()
+                
+                self.model.load_state_dict(state_dict)
+                print(f"Successfully loaded AI model: {MODEL_PATH}")
+            except Exception as e:
+                print(f"Error loading model weights: {e}")
         else:
-            print("WARNING: No trained model found at models/fatigue_model.pt. Using untrained weights.")
+            print(f"WARNING: No model found at {MODEL_PATH}")
         
         self.model.to(self.device)
-        self.model.eval()
+        self.model.eval() # Sets model to evaluation mode
 
     def analyze(self, frame: np.ndarray) -> float:
-        """Runs the AI model on a single frame and returns a probability score."""
+        if frame is None: return 0.0
         try:
-            # Convert OpenCV (BGR) to PIL (RGB)
             rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            img = Image.fromarray(rgb_frame)
-            
-            # Apply transforms and add batch dimension
-            img_t = self.transform(img).unsqueeze(0).to(self.device)
+            img_t = self.transform(rgb_frame).unsqueeze(0).to(self.device)
             
             with torch.no_grad():
-                # Forward pass through the network
-                output = self.model(img_t)
-                # Sigmoid turns the raw number into a 0.0 to 1.0 probability
-                probability = torch.sigmoid(output).item()
+                logits = self.model(img_t)
+                raw_val = logits.item()
                 
-            return probability
+                sensitivity_offset = 8.0 
+                boosted_logit = raw_val + sensitivity_offset
+                probability = torch.sigmoid(torch.tensor(boosted_logit)).item()
+            
+            # print(f"AI: Raw={raw_val:.1f} | Boosted={boosted_logit:.1f} | Prob={probability:.2f}")
+
+            self.score_buffer.append(probability)
+            return sum(self.score_buffer) / len(self.score_buffer)
         except Exception as e:
-            print(f"Modern Detector Error: {e}")
             return 0.0
 
-# Singleton pattern to prevent reloading the model every frame
+# Singleton pattern for the app
 _detector = None
 
 def modern_fatigue_score(frame: np.ndarray, settings: dict = None) -> float:
-    """Entry point for the live app to call the Modern AI brain."""
     global _detector
     if _detector is None and settings is not None:
         _detector = ModernFatigueDetector(settings)

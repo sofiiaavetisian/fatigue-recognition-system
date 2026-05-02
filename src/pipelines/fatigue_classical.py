@@ -12,8 +12,9 @@ class ClassicalFatigueDetector:
     CHIN = 152
     FOREHEAD = 10
 
-    def __init__(self, config):
-        self.cfg = config['classical'] 
+    def __init__(self, config: dict):
+        # Handle cases where config is either the full dict or the 'fatigue' sub-dict
+        self.cfg = config.get('classical', config)
         self.eye_counter = 0
         self.yawn_counter = 0
         
@@ -27,10 +28,8 @@ class ClassicalFatigueDetector:
         )
 
     def _calculate_ear(self, eye_pts):
-        # Vertical distances: ||p2-p6|| and ||p3-p5||
         v1 = dist.euclidean(eye_pts[1], eye_pts[5])
         v2 = dist.euclidean(eye_pts[2], eye_pts[4])
-        # Horizontal distance: ||p1-p4||
         h = dist.euclidean(eye_pts[0], eye_pts[3])
         return (v1 + v2) / (2.0 * h)
 
@@ -40,53 +39,66 @@ class ClassicalFatigueDetector:
         return v / h
 
     def _calculate_head_pitch_ratio(self, pts):
-        # Measures vertical face compression. As head nods down, nose-to-chin distance shrinks.
         face_height = dist.euclidean(pts[self.FOREHEAD], pts[self.CHIN])
         nose_to_chin = pts[self.CHIN][1] - pts[self.NOSE_TIP][1]
         return nose_to_chin / face_height
 
-    def analyze(self, frame) -> float:
+    def analyze(self, frame) -> dict:
+        """
+        Calculates metrics and returns a dictionary for the Hybrid Pipeline.
+        """
         rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         results = self.face_mesh.process(rgb_frame)
         
         if not results.multi_face_landmarks:
-            return 0.0
+            return {"fatigue_score": 0.0, "ear": 0.0, "mar": 0.0, "pitch": 0.0}
 
         landmarks = results.multi_face_landmarks[0].landmark
         h, w, _ = frame.shape
         pts = np.array([(int(l.x * w), int(l.y * h)) for l in landmarks])
 
-        # 1. EAR and MAR calculations[cite: 1]
+        # 1. Metric Calculations
         avg_ear = (self._calculate_ear(pts[self.LEFT_EYE]) + self._calculate_ear(pts[self.RIGHT_EYE])) / 2.0
         mar = self._calculate_mar(pts[self.MOUTH])
         pitch_ratio = self._calculate_head_pitch_ratio(pts)
 
         fatigue_score = 0.0
 
-        # 2. Progressive Eye Score (Climbs as eyes stay closed)
-        if avg_ear < self.cfg['ear_threshold']:
+        # 2. Eye Closure Logic
+        ear_thresh = self.cfg.get('ear_threshold', 0.25)
+        consec_frames = self.cfg.get('ear_consec_frames', 15)
+        
+        if avg_ear < ear_thresh:
             self.eye_counter += 1
-            # Score grows linearly toward 0.70 until frame limit is hit[cite: 14]
-            progress = min(self.eye_counter / self.cfg['ear_consec_frames'], 1.0)
+            progress = min(self.eye_counter / consec_frames, 1.0)
             fatigue_score += (0.7 * progress)
         else:
             self.eye_counter = 0
 
-        # 3. Yawn Score (Adds 0.3 if threshold met)
-        if mar > self.cfg['mar_threshold']:
+        # 3. Yawn Logic
+        mar_thresh = self.cfg.get('mar_threshold', 0.5)
+        yawn_frames = self.cfg.get('yawn_consec_frames', 20)
+        
+        if mar > mar_thresh:
             self.yawn_counter += 1
-            if self.yawn_counter >= self.cfg['yawn_consec_frames']:
+            if self.yawn_counter >= yawn_frames:
                 fatigue_score += 0.3
         else:
             self.yawn_counter = 0
 
-        # 4. Head Nod Score (Detection for drooping head)
-        # Threshold 0.33 represents a ~20% vertical compression of the face
+        # 4. Head Pose Logic
         if pitch_ratio < 0.33:
             fatigue_score += 0.5
 
-        return min(fatigue_score, 1.0)
+        # Return a dictionary for Hybrid integration
+        return {
+            "fatigue_score": min(fatigue_score, 1.0),
+            "ear": avg_ear,
+            "mar": mar,
+            "pitch": pitch_ratio
+        }
 
+# For backward compatibility with older scripts
 _detector = None
 def classical_fatigue_score(frame, settings=None) -> float:
     global _detector
@@ -94,5 +106,6 @@ def classical_fatigue_score(frame, settings=None) -> float:
         _detector = ClassicalFatigueDetector(settings)
     
     if _detector:
-        return _detector.analyze(frame)
+        res = _detector.analyze(frame)
+        return res["fatigue_score"]
     return 0.0

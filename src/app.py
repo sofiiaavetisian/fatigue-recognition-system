@@ -9,7 +9,9 @@ from src.config import load_settings
 from src.core.state_machine import ActivationState, GestureActivationFSM
 from src.pipelines.gesture import HandGestureDetector, StableGestureEmitter
 from src.utils.logging_utils import configure_logging
-from src.pipelines.fatigue_classical import classical_fatigue_score
+from src.pipelines.fatigue_classical import ClassicalFatigueDetector
+from src.pipelines.fatigue_modern import ModernFatigueDetector
+from src.pipelines.hybrid import HybridFatigueDetector
 
 
 def parse_args() -> argparse.Namespace:
@@ -61,6 +63,7 @@ def _run_live(args: argparse.Namespace, fsm: GestureActivationFSM, log: logging.
     if not cap.isOpened():
         raise RuntimeError(f"Could not open source: {source}")
 
+    # Initialize Gesture components
     try:
         detector = HandGestureDetector(preferred_hand=args.preferred_hand)
     except RuntimeError as exc:
@@ -69,6 +72,11 @@ def _run_live(args: argparse.Namespace, fsm: GestureActivationFSM, log: logging.
             "or use --simulate-gestures for FSM-only checks."
         ) from exc
     emitter = StableGestureEmitter(min_stable_frames=args.stable_frames)
+
+    fatigue_settings = settings.raw.get('fatigue', {})
+    c_detector = ClassicalFatigueDetector(fatigue_settings)
+    m_detector = ModernFatigueDetector(fatigue_settings)
+    hybrid_detector = HybridFatigueDetector(c_detector, m_detector, fatigue_settings)
 
     fps = cap.get(cv2.CAP_PROP_FPS)
     if fps <= 1e-3:
@@ -86,6 +94,7 @@ def _run_live(args: argparse.Namespace, fsm: GestureActivationFSM, log: logging.
                 break
             frame_idx += 1
 
+            # Handle Rotation
             if args.rotate == 90:
                 frame = cv2.rotate(frame, cv2.ROTATE_90_CLOCKWISE)
             elif args.rotate == 180:
@@ -97,6 +106,7 @@ def _run_live(args: argparse.Namespace, fsm: GestureActivationFSM, log: logging.
             if ts <= 0.0:
                 ts = frame_idx / fps
 
+            # 1. Gesture Detection & FSM logic
             detection = detector.detect(frame)
             emitted = emitter.update(detection.label)
             if emitted is not None:
@@ -108,10 +118,13 @@ def _run_live(args: argparse.Namespace, fsm: GestureActivationFSM, log: logging.
 
             snap = fsm.consume(gesture=emitted, ts=ts)
             
-            fatigue_score = 0.0
+            # 2. Hybrid Fatigue Analysis
+            fatigue_results = None
             if snap.state == ActivationState.ACTIVE:
-                fatigue_score = classical_fatigue_score(frame, settings=settings.raw['fatigue'])
+                # This runs both Classical (Math) and Modern (AI) and merges them
+                fatigue_results = hybrid_detector.analyze(frame)
 
+            # Logging
             if emitted is not None or snap.state != last_state:
                 log.info(
                     "t=%.2f raw=%s(%.2f) emitted=%s state=%s next=%s matched=%d",
@@ -125,39 +138,33 @@ def _run_live(args: argparse.Namespace, fsm: GestureActivationFSM, log: logging.
                 )
                 last_state = snap.state
 
+            # 3. Enhanced Display Logic
             if args.display:
                 status_color = (0, 200, 0) if snap.state == ActivationState.ACTIVE else (0, 165, 255)
-                cv2.putText(frame, f"state: {snap.state.value}", (20, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.9, status_color, 2)
-                cv2.putText(
-                    frame,
-                    f"raw: {detection.label or '-'} ({detection.confidence:.2f})",
-                    (20, 75),
-                    cv2.FONT_HERSHEY_SIMPLEX,
-                    0.7,
-                    (255, 255, 255),
-                    2,
-                )
-                cv2.putText(frame, f"emitted: {emitted or '-'}", (20, 108), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
-                cv2.putText(
-                    frame,
-                    f"next: {snap.next_expected or '-'}",
-                    (20, 141),
-                    cv2.FONT_HERSHEY_SIMPLEX,
-                    0.7,
-                    (255, 255, 255),
-                    2,
-                )
+                
+                # Activation UI
+                cv2.putText(frame, f"STATE: {snap.state.value}", (20, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.9, status_color, 2)
+                cv2.putText(frame, f"Next Gesture: {snap.next_expected or 'READY'}", (20, 75), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
 
-                if snap.state == ActivationState.ACTIVE:
-                    alert_color = (0, 0, 255) if fatigue_score > 0.6 else (255, 255, 255)
-                    cv2.putText(
-                        frame, 
-                        f"FATIGUE SCORE: {fatigue_score:.2f}", 
-                        (20, 180), 
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.9, alert_color, 2
-                    )
+                # Fatigue UI (Only shows when Active)
+                if snap.state == ActivationState.ACTIVE and fatigue_results:
+                    h_score = fatigue_results['combined_score']
+                    c_score = fatigue_results['classical_score']
+                    m_score = fatigue_results['modern_score']
+                    
+                    # Red if fatigued, Green if alert
+                    alert_color = (0, 0, 255) if fatigue_results['is_fatigued'] else (0, 255, 0)
+                    status_text = "!!! FATIGUE !!!" if fatigue_results['is_fatigued'] else "ALERT"
 
-                cv2.imshow("Driver Monitor - Gesture Activation", frame)
+                    # Main Hybrid Alert
+                    cv2.putText(frame, f"STATUS: {status_text}", (20, 130), cv2.FONT_HERSHEY_SIMPLEX, 1.1, alert_color, 3)
+                    
+                    # Detailed Breakdown for debugging/presentation
+                    cv2.putText(frame, f"Hybrid Score: {h_score:.2f}", (20, 170), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
+                    cv2.putText(frame, f" > Math (EAR/MAR): {c_score:.2f}", (40, 200), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (200, 200, 200), 1)
+                    cv2.putText(frame, f" > AI (MobileNet): {m_score:.2f}", (40, 225), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (200, 200, 200), 1)
+
+                cv2.imshow("Driver Fatigue Monitor - Hybrid System", frame)
                 if cv2.waitKey(1) & 0xFF == ord("q"):
                     break
 

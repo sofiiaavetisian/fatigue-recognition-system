@@ -29,9 +29,9 @@ fatigue:
 
   classical:
     ear_threshold: 0.25
-    ear_consec_frames: 15
+    ear_consec_frames: 20
     mar_threshold: 0.55
-    yawn_consec_frames: 10
+    yawn_consec_frames: 15
     pitch_nod_threshold_deg: 18
     classifier_path: models/classical_classifier.pkl
   modern:

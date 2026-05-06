@@ -117,7 +117,12 @@ def _run_live(args: argparse.Namespace, fsm: GestureActivationFSM, log: logging.
                     last_emitted_ts = ts
 
             snap = fsm.consume(gesture=emitted, ts=ts)
-            
+
+            # Reset fatigue counters on the LISTENING -> ACTIVE edge so a long
+            # blink during the gesture sequence doesn't pre-bias detection.
+            if snap.state == ActivationState.ACTIVE and last_state != ActivationState.ACTIVE:
+                hybrid_detector.reset()
+
             # 2. Hybrid Fatigue Analysis
             fatigue_results = None
             if snap.state == ActivationState.ACTIVE:
@@ -151,18 +156,23 @@ def _run_live(args: argparse.Namespace, fsm: GestureActivationFSM, log: logging.
                     h_score = fatigue_results['combined_score']
                     c_score = fatigue_results['classical_score']
                     m_score = fatigue_results['modern_score']
-                    
-                    # Red if fatigued, Green if alert
-                    alert_color = (0, 0, 255) if fatigue_results['is_fatigued'] else (0, 255, 0)
-                    status_text = "!!! FATIGUE !!!" if fatigue_results['is_fatigued'] else "ALERT"
+                    face_present = fatigue_results.get('face_present', True)
 
-                    # Main Hybrid Alert
-                    cv2.putText(frame, f"STATUS: {status_text}", (20, 130), cv2.FONT_HERSHEY_SIMPLEX, 1.1, alert_color, 3)
-                    
-                    # Detailed Breakdown for debugging/presentation
-                    cv2.putText(frame, f"Hybrid Score: {h_score:.2f}", (20, 170), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
-                    cv2.putText(frame, f" > Math (EAR/MAR): {c_score:.2f}", (40, 200), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (200, 200, 200), 1)
-                    cv2.putText(frame, f" > AI (MobileNet): {m_score:.2f}", (40, 225), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (200, 200, 200), 1)
+                    if not face_present:
+                        cv2.putText(frame, "NO FACE DETECTED", (20, 130), cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 200, 255), 3)
+                    else:
+                        alert_color = (0, 0, 255) if fatigue_results['is_fatigued'] else (0, 255, 0)
+                        status_text = "!!! FATIGUE !!!" if fatigue_results['is_fatigued'] else "ALERT"
+                        cv2.putText(frame, f"STATUS: {status_text}", (20, 130), cv2.FONT_HERSHEY_SIMPLEX, 1.1, alert_color, 3)
+
+                        # Detailed Breakdown for debugging/presentation
+                        cv2.putText(frame, f"Hybrid Score: {h_score:.2f}", (20, 170), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
+                        cv2.putText(frame, f" > Math (EAR/MAR): {c_score:.2f}", (40, 200), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (200, 200, 200), 1)
+                        cv2.putText(frame, f" > AI (MobileNet): {m_score:.2f}", (40, 225), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (200, 200, 200), 1)
+                        bbox = fatigue_results.get('face_bbox')
+                        if bbox is not None:
+                            x1, y1, x2, y2 = bbox
+                            cv2.rectangle(frame, (x1, y1), (x2, y2), (255, 255, 0), 1)
 
                 cv2.imshow("Driver Fatigue Monitor - Hybrid System", frame)
                 if cv2.waitKey(1) & 0xFF == ord("q"):

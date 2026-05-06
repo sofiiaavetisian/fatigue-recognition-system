@@ -11,9 +11,8 @@ The system activates only when this ordered gesture sequence is detected:
 ## The Hybrid Brain
 This system uses a "Dual-Brain" approach to maximize reliability:
 
-*   **Classical (The Math):** Uses Mediapipe to calculate **Eye Aspect Ratio (EAR)** and **Mouth Aspect Ratio (MAR)**. This provides the logic for eye closure duration and yawning.
-*   **Modern (The AI):** Uses a **MobileNetV3-Small** neural network. This model feels the overall fatigue of the face, head tilt, and expression.
-*   **Sensitivity Tuning:** The AI is configured with a **+8.0 logit boost** in `fatigue_modern.py` to ensure high sensitivity on real-world webcams.
+*   **Classical (The Math):** Uses MediaPipe Face Mesh to compute **Eye Aspect Ratio (EAR)**, **Mouth Aspect Ratio (MAR)**, and **head pitch in degrees** via `cv2.solvePnP`. These features feed a **scikit-learn classifier** (RandomForest / LogisticRegression) trained on auto-labeled frames; if no classifier is available, the detector falls back to a hand-tuned rule-based score.
+*   **Modern (The AI):** A **MobileNetV3-Small** CNN. Inference runs on a **face crop** (extracted from the same Face Mesh output) — not the whole frame — so the model focuses on the eyes/mouth/head region.
 *   **Weighted Fusion:** The final score is a weighted average (**55% Math / 45% AI**), ensuring the system works even if the AI is uncertain or the lighting is poor for geometric math.
 
 ## Reproducible setup
@@ -88,13 +87,22 @@ To train or run the AI-based fatigue detector, you must generate a labeled datas
 Once the dataset is prepared and split, we can train and verify the Deep Learning fatigue model (MobileNetV3).
 
 ### How to Run
-1. **Train the model**: `python -m src.tools.train_modern`
-2. **Evaluate accuracy**: `python -m src.tools.evaluate_modern`
-3. **Visual Demo**: `python -m src.tools.test_modern_model`
+1. **Train the modern model**: `python -m src.tools.train_modern`
+2. **Train the classical classifier**: `python -m src.tools.train_classical_classifier`
+3. **Evaluate modern accuracy**: `python -m src.tools.evaluate_modern`
+4. **Visual demo**: `python -m src.tools.test_modern_model --video data/raw/IMG_8221.MOV`
 
 ### Artifacts
-- Model Weights: `models/fatigue_model.pt`
-- Training Metrics: `models/training_summary.json`
+- Modern model weights: `models/fatigue_model.pt`
+- Modern training metrics: `models/training_summary.json`
+- Classical classifier: `models/classical_classifier.pkl`
+- Classical classifier metrics: `models/classical_classifier_summary.json`
+
+> **Note:** The shipped `fatigue_model.pt` was trained on full frames. The
+> current pipeline now feeds the model **face crops** (which is the right
+> thing to do). For best results, re-run `preprocess_videos` and
+> `train_modern` so the model sees the same input distribution at training
+> and inference time.
 
 ## Project structure
 - `configs/`: YAML configs

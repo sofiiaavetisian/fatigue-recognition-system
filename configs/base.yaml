@@ -33,6 +33,7 @@ fatigue:
     mar_threshold: 0.55
     yawn_consec_frames: 10
     pitch_nod_threshold_deg: 18
+    classifier_path: models/classical_classifier.pkl
   modern:
     model_path: models/fatigue_model.pt  
     threshold: 0.60

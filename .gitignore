@@ -26,6 +26,8 @@ models/**
 !models/.gitkeep
 !models/training_summary.json
 !models/thumbs_up_calibration.json
+!models/fatigue_model.pt
+!models/classical_classifier.pkl
 data/raw/*
 data/processed/**
 data/splits/*

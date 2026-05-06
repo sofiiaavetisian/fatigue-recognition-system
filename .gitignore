@@ -13,6 +13,9 @@ venv/
 .vscode/
 .idea/
 
+# Claude Code internal state (sessions, worktrees, etc.)
+.claude/
+
 data/
 # Build artifacts
 build/

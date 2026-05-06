@@ -28,6 +28,7 @@ models/**
 !models/thumbs_up_calibration.json
 !models/fatigue_model.pt
 !models/classical_classifier.pkl
+!models/classical_classifier_summary.json
 data/raw/*
 data/processed/**
 data/splits/*

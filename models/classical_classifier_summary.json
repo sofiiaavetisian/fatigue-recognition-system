@@ -1,0 +1,61 @@
+{
+  "model_kind": "random_forest",
+  "feature_order": [
+    "ear",
+    "mar",
+    "pitch_deg",
+    "eye_closed_progress",
+    "yawn_progress"
+  ],
+  "n_train": 960,
+  "n_val": 206,
+  "n_test": 206,
+  "val_metrics_random_forest": {
+    "accuracy": 1.0,
+    "precision": 1.0,
+    "recall": 1.0,
+    "f1": 1.0,
+    "confusion_matrix": [
+      [
+        156,
+        0
+      ],
+      [
+        0,
+        50
+      ]
+    ]
+  },
+  "val_metrics_logistic_regression": {
+    "accuracy": 1.0,
+    "precision": 1.0,
+    "recall": 1.0,
+    "f1": 1.0,
+    "confusion_matrix": [
+      [
+        156,
+        0
+      ],
+      [
+        0,
+        50
+      ]
+    ]
+  },
+  "test_metrics": {
+    "accuracy": 1.0,
+    "precision": 1.0,
+    "recall": 1.0,
+    "f1": 1.0,
+    "confusion_matrix": [
+      [
+        156,
+        0
+      ],
+      [
+        0,
+        50
+      ]
+    ]
+  }
+}

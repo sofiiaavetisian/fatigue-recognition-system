@@ -21,6 +21,7 @@ class TestHybridFatigue(unittest.TestCase):
                 'weight_classical': 0.55,
                 'weight_modern': 0.45,
                 'threshold': 0.45,
+                'alarm_consec_frames': 1,
             }
         }
         self.hybrid = HybridFatigueDetector(self.mock_classical, self.mock_modern, self.config)
@@ -71,6 +72,52 @@ class TestHybridFatigue(unittest.TestCase):
         self.hybrid.reset()
         self.mock_classical.reset_counters.assert_called_once()
         self.mock_modern.reset.assert_called_once()
+
+    def test_alarm_requires_consecutive_above_threshold_frames(self):
+        cfg = {'hybrid': {
+            'weight_classical': 0.55, 'weight_modern': 0.45,
+            'threshold': 0.45, 'alarm_consec_frames': 3,
+        }}
+        hybrid = HybridFatigueDetector(self.mock_classical, self.mock_modern, cfg)
+        self.mock_classical.analyze.return_value = {
+            "fatigue_score": 0.6, "face_bbox": (10, 10, 100, 100), "face_present": True,
+        }
+        self.mock_modern.analyze.return_value = 0.6
+        frame = np.zeros((100, 100, 3), dtype=np.uint8)
+
+        # First two frames above threshold but streak too short → no alarm
+        self.assertFalse(hybrid.analyze(frame)["is_fatigued"])
+        self.assertFalse(hybrid.analyze(frame)["is_fatigued"])
+        # Third frame finally trips the alarm
+        self.assertTrue(hybrid.analyze(frame)["is_fatigued"])
+
+    def test_below_threshold_resets_alarm_streak(self):
+        cfg = {'hybrid': {
+            'weight_classical': 0.55, 'weight_modern': 0.45,
+            'threshold': 0.45, 'alarm_consec_frames': 3,
+        }}
+        hybrid = HybridFatigueDetector(self.mock_classical, self.mock_modern, cfg)
+        frame = np.zeros((100, 100, 3), dtype=np.uint8)
+
+        # Two above-threshold frames, then a below-threshold frame, then two more above
+        self.mock_classical.analyze.return_value = {
+            "fatigue_score": 0.6, "face_bbox": (10, 10, 100, 100), "face_present": True,
+        }
+        self.mock_modern.analyze.return_value = 0.6
+        hybrid.analyze(frame)
+        hybrid.analyze(frame)
+        self.mock_classical.analyze.return_value = {
+            "fatigue_score": 0.1, "face_bbox": (10, 10, 100, 100), "face_present": True,
+        }
+        self.mock_modern.analyze.return_value = 0.1
+        hybrid.analyze(frame)  # streak reset
+        self.mock_classical.analyze.return_value = {
+            "fatigue_score": 0.6, "face_bbox": (10, 10, 100, 100), "face_present": True,
+        }
+        self.mock_modern.analyze.return_value = 0.6
+        self.assertFalse(hybrid.analyze(frame)["is_fatigued"])  # only 1 since reset
+        self.assertFalse(hybrid.analyze(frame)["is_fatigued"])  # 2
+        self.assertTrue(hybrid.analyze(frame)["is_fatigued"])   # 3
 
 
 if __name__ == "__main__":

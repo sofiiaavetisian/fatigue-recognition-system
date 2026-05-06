@@ -33,7 +33,8 @@ class HybridFatigueDetector:
                 "combined_score": combined_score,
                 "classical_score": c_score,
                 "modern_score": m_score,
-                "is_fatigued": is_fatigued
+                "is_fatigued": is_fatigued,
+                "face_box": c_results.get("face_box") if isinstance(c_results, dict) else None,
             }
         except Exception as e:
             print(f"HYBRID ERROR: {e}")

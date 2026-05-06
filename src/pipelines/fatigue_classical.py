@@ -51,11 +51,13 @@ class ClassicalFatigueDetector:
         results = self.face_mesh.process(rgb_frame)
         
         if not results.multi_face_landmarks:
-            return {"fatigue_score": 0.0, "ear": 0.0, "mar": 0.0, "pitch": 0.0}
+            return {"fatigue_score": 0.0, "ear": 0.0, "mar": 0.0, "pitch": 0.0, "face_box": None}
 
         landmarks = results.multi_face_landmarks[0].landmark
         h, w, _ = frame.shape
         pts = np.array([(int(l.x * w), int(l.y * h)) for l in landmarks])
+        x_min, y_min = pts.min(axis=0)
+        x_max, y_max = pts.max(axis=0)
 
         # 1. Metric Calculations
         avg_ear = (self._calculate_ear(pts[self.LEFT_EYE]) + self._calculate_ear(pts[self.RIGHT_EYE])) / 2.0
@@ -95,7 +97,8 @@ class ClassicalFatigueDetector:
             "fatigue_score": min(fatigue_score, 1.0),
             "ear": avg_ear,
             "mar": mar,
-            "pitch": pitch_ratio
+            "pitch": pitch_ratio,
+            "face_box": (int(x_min), int(y_min), int(x_max), int(y_max)),
         }
 
 # For backward compatibility with older scripts

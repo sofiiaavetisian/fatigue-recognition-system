@@ -146,6 +146,13 @@ def _run_live(args: argparse.Namespace, fsm: GestureActivationFSM, log: logging.
                 cv2.putText(frame, f"STATE: {snap.state.value}", (20, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.9, status_color, 2)
                 cv2.putText(frame, f"Next Gesture: {snap.next_expected or 'READY'}", (20, 75), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
 
+                # Face bounding box
+                if snap.state == ActivationState.ACTIVE and fatigue_results:
+                    box = fatigue_results.get("face_box")
+                    if box is not None:
+                        box_color = (0, 0, 255) if fatigue_results["is_fatigued"] else (0, 255, 0)
+                        cv2.rectangle(frame, (box[0], box[1]), (box[2], box[3]), box_color, 2)
+
                 # Fatigue UI (Only shows when Active)
                 if snap.state == ActivationState.ACTIVE and fatigue_results:
                     h_score = fatigue_results['combined_score']

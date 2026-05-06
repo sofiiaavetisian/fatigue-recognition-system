@@ -29,17 +29,18 @@ fatigue:
 
   classical:
     ear_threshold: 0.25
-    ear_consec_frames: 10
+    ear_consec_frames: 20
     mar_threshold: 0.55
-    yawn_consec_frames: 10
+    yawn_consec_frames: 15
     pitch_nod_threshold_deg: 18
   modern:
-    model_path: models/fatigue_model.pt  
+    model_path: models/fatigue_model.pt
     threshold: 0.60
-    smoothing_window: 6                 
+    smoothing_window: 6
+    sensitivity_offset: 0.0
 
   # This matches HybridFatigueDetector
-  hybrid:                                
-    weight_classical: 0.55            
-    weight_modern: 0.45                 
-    threshold: 0.45                     
+  hybrid:
+    weight_classical: 0.55
+    weight_modern: 0.45
+    threshold: 0.55                     

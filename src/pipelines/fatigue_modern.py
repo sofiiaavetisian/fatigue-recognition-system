@@ -65,7 +65,7 @@ class ModernFatigueDetector:
                 logits = self.model(img_t)
                 raw_val = logits.item()
                 
-                sensitivity_offset = 8.0 
+                sensitivity_offset = self.cfg.get('sensitivity_offset', 0.0)
                 boosted_logit = raw_val + sensitivity_offset
                 probability = torch.sigmoid(torch.tensor(boosted_logit)).item()
             

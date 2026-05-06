@@ -12,7 +12,7 @@ The system activates only when this ordered gesture sequence is detected:
 This system uses a "Dual-Brain" approach to maximize reliability:
 
 *   **Classical (The Math):** Uses MediaPipe Face Mesh to compute **Eye Aspect Ratio (EAR)**, **Mouth Aspect Ratio (MAR)**, and **head pitch in degrees** via `cv2.solvePnP`. These features feed a **scikit-learn classifier** (RandomForest / LogisticRegression) trained on auto-labeled frames; if no classifier is available, the detector falls back to a hand-tuned rule-based score.
-*   **Modern (The AI):** A **MobileNetV3-Small** CNN. Inference runs on a **face crop** (extracted from the same Face Mesh output) — not the whole frame — so the model focuses on the eyes/mouth/head region.
+*   **Modern (The AI):** A **MobileNetV3-Small** CNN. Inference runs on a **face crop** extracted from the same Face Mesh output, not the whole frame, so the model focuses on the eyes, mouth, and head region.
 *   **Weighted Fusion:** The final score is a weighted average (**55% Math / 45% AI**), ensuring the system works even if the AI is uncertain or the lighting is poor for geometric math.
 
 ## Reproducible setup
@@ -30,13 +30,14 @@ source .venv/bin/activate
 ```
 
 ## Testing & Verification
-Before running the full app, verify the core logic and hardware compatibility:
+Before running the full app, verify the core logic:
 ```bash
-# Run the full test suite (FSM, Hand Landmarks, UI)
-python3 -m unittest discover tests
+# Run the full test suite (28 tests covering FSM, gesture stabilizer,
+# classical pipeline, modern pipeline, hybrid fusion + alarm streak)
+pytest -q
 
-# Specifically verify the Hybrid weight math (0.55/0.45 split)
-python3 -m tests.test_hybrid
+# Run a single test file by name
+pytest -q tests/test_hybrid.py
 ```
 
 ## Quick checks
@@ -47,15 +48,16 @@ python -m src.app --config configs/base.yaml --simulate-gestures thumbs_up,peace
 ```
 
 ## Run with real video/webcam
+
+> **Note:** Inference is pinned to CPU for portability across hardware (no CUDA or MPS dependency).
+
 ```bash
-# Video file
-python -m src.app --config configs/base.yaml --video data/raw/IMG_8221.MOV --max-frames 400
+# Video file (filenames in data/raw/ are clip_01.mp4 ... clip_18.mp4 by default)
+python -m src.app --config configs/base.yaml --video data/raw/clip_01.mp4 --max-frames 400
 
-> **Note for Mac Users:** This system is configured to run AI inference on the **CPU** by default. This ensures stability on Intel/AMD MacBooks and avoids common crashes associated with the MPS (Metal) backend.
-
-# Rotate video (if recorded upside-down or sideways)
+# Rotate video at runtime if a clip needs it (also possible via configs/rotation_map.json)
 # Options: 90 (clockwise), 180 (flip), 270 (counter-clockwise)
-python -m src.app --config configs/base.yaml --video data/raw/IMG_8234.MOV --rotate 180 --display
+python -m src.app --config configs/base.yaml --video data/raw/clip_06.mp4 --rotate 180 --display
 
 # Webcam + overlay window
 python -m src.app --config configs/base.yaml --display
@@ -93,16 +95,11 @@ Once the dataset is prepared and split, we can train and verify the Deep Learnin
 4. **Visual demo**: `python -m src.tools.test_modern_model --video data/raw/IMG_8221.MOV`
 
 ### Artifacts
-- Modern model weights: `models/fatigue_model.pt`
+- Modern model weights: `models/fatigue_model.pt` (trained on face crops; 96.6% test accuracy, F1 0.932)
 - Modern training metrics: `models/training_summary.json`
-- Classical classifier: `models/classical_classifier.pkl`
+- Classical classifier: `models/classical_classifier.pkl` (RandomForest)
 - Classical classifier metrics: `models/classical_classifier_summary.json`
-
-> **Note:** The shipped `fatigue_model.pt` was trained on full frames. The
-> current pipeline now feeds the model **face crops** (which is the right
-> thing to do). For best results, re-run `preprocess_videos` and
-> `train_modern` so the model sees the same input distribution at training
-> and inference time.
+- Thumbs-up calibration: `models/thumbs_up_calibration.json`
 
 ## Project structure
 - `configs/`: YAML configs

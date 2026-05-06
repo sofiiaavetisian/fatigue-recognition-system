@@ -2,14 +2,15 @@
   "thumb_tip_to_index_mcp_ratio_min": 1.05,
   "thumb_tip_wrist_to_ip_wrist_ratio_min": 1.01,
   "thumb_up_dy_max": -0.005,
-  "thumb_verticality_min": 5.134327030181885,
-  "thumb_tip_above_knuckle_offset": 0.32952952504158023,
-  "thumbs_up_score_threshold": 0.55,
+  "thumb_verticality_min": 1.0,
+  "thumb_tip_above_knuckle_offset": 0.02,
+  "thumbs_up_score_threshold": 0.45,
   "meta": {
     "source_dir": "data/labels/thumbs_up",
     "videos": 15,
     "valid_frames": 177,
     "preferred_hand": "right",
-    "sample_every": 2
+    "sample_every": 2,
+    "tuned_for_ease_of_detection": true
   }
 }
